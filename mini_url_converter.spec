@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\release_app.py'],
+    ['app\\ui_polish.py'],
     pathex=[],
     binaries=[],
     datas=[],
