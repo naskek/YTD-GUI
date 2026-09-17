@@ -62,15 +62,15 @@ jobs:
 
           "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
 
-      - name: Source syntax and auth policy self-test
+      - name: Source syntax and Chrome bridge self-test
         shell: pwsh
         run: |
-          python -m py_compile app/mini_url_converter.py app/launcher.py app/main.py app/runtime.py app/auto_auth.py app/browser_auth.py app/auth_policy.py app/version.py
-          python app/auth_policy.py --self-test
+          python -m py_compile app/mini_url_converter.py app/launcher.py app/main.py app/runtime.py app/auto_auth.py app/browser_auth.py app/auth_policy.py app/chrome_bridge.py app/chrome_native_host.py app/chrome_bridge_auth.py app/version.py
+          python app/chrome_bridge_auth.py --self-test
 
       - name: Build and run smoke tests
         shell: pwsh
-        run: .\build_installer.ps1
+        run: .\build_chrome_bridge.ps1
 
       - name: Upload CI build
         if: github.event_name == 'push'
@@ -79,6 +79,7 @@ jobs:
           name: MiniURLConverter-${{ github.sha }}
           path: |
             dist/mini_url_converter.exe
+            dist/chrome_native_host.exe
             installer/Output/MiniURLConverterSetup.exe
           if-no-files-found: error
           retention-days: 14
