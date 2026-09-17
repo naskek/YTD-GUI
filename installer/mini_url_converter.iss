@@ -1,4 +1,11 @@
 [Preprocessor]
+#define AppVersionEnv GetEnv("YTD_GUI_VERSION")
+#if AppVersionEnv == ""
+  #define AppVersion "1.1.0"
+#else
+  #define AppVersion AppVersionEnv
+#endif
+
 #ifndef SmokeBuild
   #define Privileges "admin"
   #define Uninstallable "yes"
@@ -17,7 +24,7 @@
 [Setup]
 AppId={{{#AppGuid}}
 AppName=Mini URL Converter
-AppVersion=1.1.0
+AppVersion={#AppVersion}
 AppPublisher=Mini URL Converter
 DefaultDirName={autopf}\Mini URL Converter
 DefaultGroupName=Mini URL Converter
