@@ -18,7 +18,7 @@ $ToolsDir = Join-Path $ProjectRoot 'tools'
 $DownloadsDir = Join-Path $ProjectRoot 'downloads'
 $DistDir = Join-Path $ProjectRoot 'dist'
 $AppDir = Join-Path $ProjectRoot 'app'
-$AppScript = Join-Path $AppDir 'mini_url_converter.py'
+$AppScript = Join-Path $AppDir 'launcher.py'
 
 $YtDlpDownloadUrl = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
 $FfmpegZipUrl = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
@@ -174,17 +174,17 @@ function Show-InstalledVersions {
 }
 
 function Get-PythonLauncher {
-    if (Get-Command -Name py -ErrorAction SilentlyContinue) {
-        return [pscustomobject]@{
-            FilePath = 'py'
-            PrefixArgs = @('-3')
-        }
-    }
-
     if (Get-Command -Name python -ErrorAction SilentlyContinue) {
         return [pscustomobject]@{
             FilePath = 'python'
             PrefixArgs = @()
+        }
+    }
+
+    if (Get-Command -Name py -ErrorAction SilentlyContinue) {
+        return [pscustomobject]@{
+            FilePath = 'py'
+            PrefixArgs = @('-3')
         }
     }
 
@@ -223,7 +223,7 @@ function Build-GuiExecutable {
     $python = Get-PythonLauncher
 
     Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m', 'pip', 'install', '--upgrade', 'pyinstaller'))
-    Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed', 'app\mini_url_converter.py'))
+    Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m', 'PyInstaller', '--noconfirm', '--clean', '--onefile', '--windowed', 'app\launcher.py'))
 
     Write-Success "Build finished. Output folder: $DistDir"
 }
