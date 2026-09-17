@@ -21,6 +21,7 @@ DOWNLOAD_FINISHED_RE = re.compile(
     r"\[download\]\s+100%\s+of\s+(?:~\s*)?(?P<size>\d+(?:\.\d+)?\s*[KMGT]?i?B)\s+in\s+(?P<elapsed>\S+)(?:\s+at\s+(?P<speed>.+))?",
     re.IGNORECASE,
 )
+POSTPROCESS_PREFIX = "__MUC_PP__:"
 
 RUNTIME_TEXT = {
     "en": {
@@ -113,6 +114,15 @@ class App(previous.App):
     def _reset_progress_state(self) -> None:
         self._reset_eta_state()
         super()._reset_progress_state()
+
+    def build_command(self, url: str) -> list[str]:
+        command = super().build_command(url)
+        # Use yt-dlp's supported post-process progress channel instead of relying
+        # only on human-readable [ExtractAudio] output, which may change or be delayed.
+        marker_template = "postprocess:__MUC_PP__:%(progress.status)s:%(progress.postprocessor)s"
+        insert_at = max(0, len(command) - 1)
+        command[insert_at:insert_at] = ["--progress-template", marker_template]
+        return command
 
     def build_error_dialog(self, summary: str) -> str:
         lower = summary.lower()
@@ -220,6 +230,33 @@ class App(previous.App):
             speed=speed_suffix,
         )
 
+    def _enter_mp3_postprocess(self, progress: float = 92.0) -> None:
+        self._eta_speed = 0.0
+        self._set_progress(max(self.total_progress_value, progress), f"{int(progress)}%")
+        self._set_task_busy("...", self.rt("status_converting_mp3"))
+        self._set_status(self.rt("status_converting_mp3"))
+
+    def _handle_postprocess_marker(self, line: str) -> bool:
+        if not line.startswith(POSTPROCESS_PREFIX):
+            return False
+        payload = line[len(POSTPROCESS_PREFIX):]
+        status, _, postprocessor = payload.partition(":")
+        status = status.strip().lower()
+        postprocessor = postprocessor.strip().lower()
+
+        if status == "started":
+            if "extractaudio" in postprocessor or str(self.ytdlp_settings.get("output_mode")) == "mp3":
+                self._enter_mp3_postprocess(94.0)
+            else:
+                self._set_progress(max(self.total_progress_value, 94.0), "94%")
+                self._set_task_busy("...", self.rt("status_finalizing"))
+                self._set_status(self.rt("status_finalizing"))
+        elif status == "finished":
+            self._set_progress(max(self.total_progress_value, 98.0), "98%")
+            self._set_task_busy("...", self.rt("status_finalizing"))
+            self._set_status(self.rt("status_finalizing"))
+        return True
+
     def run_ytdlp_command(self, command: list[str]) -> str | None:
         output_file: str | None = None
         self._reset_eta_state()
@@ -229,6 +266,9 @@ class App(previous.App):
             detected_output = self.parse_progress(line)
             if detected_output:
                 output_file = detected_output
+
+            if line.startswith(POSTPROCESS_PREFIX):
+                return
 
             if core.PROGRESS_RE.search(line):
                 if not self._download_summary_logged and DOWNLOAD_FINISHED_RE.search(line):
@@ -249,6 +289,16 @@ class App(previous.App):
         return output_file
 
     def parse_progress(self, line: str) -> str | None:
+        if self._handle_postprocess_marker(line):
+            return None
+
+        finished_match = DOWNLOAD_FINISHED_RE.search(line)
+        if finished_match is not None and str(self.ytdlp_settings.get("output_mode")) == "mp3":
+            # The network transfer is over. Switch immediately to an active
+            # conversion state; do not leave a full green bar saying Downloading.
+            self._enter_mp3_postprocess(92.0)
+            return None
+
         match = core.PROGRESS_RE.search(line)
         if match:
             pct = float(match.group("pct"))
@@ -263,9 +313,7 @@ class App(previous.App):
 
         lower = line.lower()
         if "[extractaudio]" in lower:
-            self._set_progress(max(self.total_progress_value, 94.0), "94%")
-            self._set_task_busy("...", self.rt("status_converting_mp3"))
-            self._set_status(self.rt("status_converting_mp3"))
+            self._enter_mp3_postprocess(94.0)
         elif "deleting original file" in lower or "[metadata]" in lower or "[embedthumbnail]" in lower:
             self._set_progress(max(self.total_progress_value, 98.0), "98%")
             self._set_task_busy("...", self.rt("status_finalizing"))
@@ -346,6 +394,11 @@ def self_test() -> int:
     final_sample = "[download] 100% of 100.00MiB in 00:00:10 at 10.00MiB/s"
     if DOWNLOAD_FINISHED_RE.search(final_sample) is None:
         errors.append("Download completion parser failed.")
+    pp_sample = "__MUC_PP__:started:ExtractAudio"
+    payload = pp_sample[len(POSTPROCESS_PREFIX):]
+    status, _, postprocessor = payload.partition(":")
+    if status != "started" or postprocessor != "ExtractAudio":
+        errors.append("Post-process marker parser failed.")
     if errors:
         core._write_self_test_diagnostic("\n".join(errors) + "\n", is_error=True)
         return 1
