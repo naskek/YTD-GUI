@@ -7,6 +7,7 @@ import tkinter as tk
 from PIL import Image, ImageOps, ImageTk
 
 import mini_url_converter as core
+import release_app as release_layer
 import ui_polish as previous
 
 
@@ -31,6 +32,28 @@ ICON_SIZES = {
     "flag-ru": 30,
     "flag-en": 30,
 }
+
+
+# Keep the lower auth layers generic, but explain the practical cookies.txt
+# export path in the release UI when YouTube requires an authenticated session.
+release_layer.UI_TEXT["ru"]["cookies_required"] = (
+    "Для этого видео требуется вход в YouTube. Выберите свежий cookies.txt, чтобы продолжить.\n\n"
+    "Подсказка: cookies.txt можно экспортировать из Chrome расширением «Get cookies.txt LOCALLY» "
+    "(формат Netscape). Файл содержит данные вашей сессии — не передавайте его другим."
+)
+release_layer.UI_TEXT["ru"]["cookies_retry_failed"] = (
+    "YouTube отклонил выбранный cookies.txt. Экспортируйте свежий файл и попробуйте снова.\n\n"
+    "Для Chrome можно использовать расширение «Get cookies.txt LOCALLY» и экспорт в формате Netscape."
+)
+release_layer.UI_TEXT["en"]["cookies_required"] = (
+    "This video requires YouTube sign-in. Select a fresh cookies.txt to continue.\n\n"
+    "Tip: you can export cookies.txt from Chrome with the “Get cookies.txt LOCALLY” extension "
+    "using Netscape format. The file contains session data, so do not share it."
+)
+release_layer.UI_TEXT["en"]["cookies_retry_failed"] = (
+    "YouTube rejected the selected cookies.txt. Export a fresh file and try again.\n\n"
+    "For Chrome, you can use the “Get cookies.txt LOCALLY” extension and export in Netscape format."
+)
 
 
 def resource_root() -> Path:
