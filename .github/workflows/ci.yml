@@ -63,11 +63,12 @@ jobs:
           "YTD_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
           "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
 
-      - name: Source syntax and release self-test
+      - name: Source syntax and self-tests
         shell: pwsh
         run: |
-          python -m py_compile app/mini_url_converter.py app/launcher.py app/main.py app/runtime.py app/auto_auth.py app/browser_auth.py app/auth_policy.py app/release_app.py app/ui_polish.py app/ui_assets.py app/version.py
-          python app/ui_assets.py --self-test
+          python -m py_compile app/mini_url_converter.py app/launcher.py app/main.py app/runtime.py app/auto_auth.py app/browser_auth.py app/auth_policy.py app/release_app.py app/ui_polish.py app/ui_assets.py app/mp3_progress.py app/self_update.py app/inplace_update.py app/updater_main.py app/version.py
+          python app/inplace_update.py --self-test
+          python app/updater_main.py --self-test
 
       - name: Build and run smoke tests
         shell: pwsh
@@ -80,6 +81,7 @@ jobs:
           name: YTDConverter-${{ github.sha }}
           path: |
             dist/YTDConverter.exe
+            dist/YTDUpdater.exe
             installer/Output/YTDConverterSetup.exe
           if-no-files-found: error
           retention-days: 14

@@ -44,6 +44,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 Source: "..\dist\YTDConverter.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\YTDUpdater.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Runtime tools are stored in user-writable app data and maintained by the update center.
 
 [InstallDelete]

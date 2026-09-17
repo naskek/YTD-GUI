@@ -105,6 +105,7 @@ jobs:
           Copy-Item "installer\Output\YTDConverterSetup.exe" "installer\Output\YTDConverterSetup-$version.exe"
           Copy-Item "installer\Output\YTDConverterSetup.exe" "installer\Output\MiniURLConverterSetup-$version.exe"
           Copy-Item "dist\YTDConverter.exe" "dist\YTDConverter-$version.exe"
+          Copy-Item "dist\YTDUpdater.exe" "dist\YTDUpdater-$version.exe"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -114,6 +115,7 @@ jobs:
             installer/Output/YTDConverterSetup-${{ steps.version.outputs.version }}.exe
             installer/Output/MiniURLConverterSetup-${{ steps.version.outputs.version }}.exe
             dist/YTDConverter-${{ steps.version.outputs.version }}.exe
+            dist/YTDUpdater-${{ steps.version.outputs.version }}.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -128,10 +130,11 @@ jobs:
           $installer = "installer\Output\YTDConverterSetup-$version.exe"
           $legacyInstaller = "installer\Output\MiniURLConverterSetup-$version.exe"
           $standalone = "dist\YTDConverter-$version.exe"
+          $updater = "dist\YTDUpdater-$version.exe"
 
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $installer $legacyInstaller $standalone --clobber --repo $env:GITHUB_REPOSITORY
+            gh release upload $tag $installer $legacyInstaller $standalone $updater --clobber --repo $env:GITHUB_REPOSITORY
           } else {
-            gh release create $tag $installer $legacyInstaller $standalone --title "$tag — YTD Converter" --generate-notes --repo $env:GITHUB_REPOSITORY
+            gh release create $tag $installer $legacyInstaller $standalone $updater --title "$tag — YTD Converter" --generate-notes --repo $env:GITHUB_REPOSITORY
           }

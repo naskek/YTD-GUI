@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['app\\inplace_update.py'],
+    ['app\\updater_main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets\\icons', 'assets\\icons')],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='YTDConverter',
+    name='YTDUpdater',
     icon='img\\ytd_converter.ico',
     debug=False,
     bootloader_ignore_signals=False,
