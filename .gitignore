@@ -1,0 +1,69 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Editor settings
+.vscode/
+
+# PyInstaller build output
+build/
+dist/
+installer/Output/
+tools/inno/
+
+# App runtime data
+.mini_url_converter.settings.json
+downloads/
+
+# Temporary files
+*.tmp
+*.bak
+*.new
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Build artifacts ---
+build/
+dist/
+
+# --- Local environment / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Temporary files ---
+*.tmp
+*.bak
+*.log
+
+build_log.txt
+*.patch
