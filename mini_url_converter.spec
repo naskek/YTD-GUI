@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\chrome_bridge_auth.py'],
+    ['app\\release_app.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -26,7 +26,7 @@ exe = EXE(
     icon='img\\mini_url_converter.ico',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
