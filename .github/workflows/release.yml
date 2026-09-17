@@ -55,6 +55,13 @@ jobs:
 
           "version=$normalized" >> $env:GITHUB_OUTPUT
 
+      - name: Stamp application version
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Set-Content -LiteralPath "app\version.py" -Value "APP_VERSION = `"$version`"" -Encoding utf8
+          Get-Content -LiteralPath "app\version.py"
+
       - name: Install build dependencies
         shell: pwsh
         run: |
