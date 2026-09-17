@@ -10,13 +10,13 @@
   #define Privileges "admin"
   #define Uninstallable "yes"
   #define DesktopDir "{commondesktop}"
-  #define OutputName "MiniURLConverterSetup"
+  #define OutputName "YTDConverterSetup"
   #define AppGuid "B56A8D1E-70F4-4FB5-9B4C-8F0BBCC4A1D3"
 #else
   #define Privileges "lowest"
   #define Uninstallable "no"
   #define DesktopDir "{userdesktop}"
-  #define OutputName "MiniURLConverterSetup-smoke"
+  #define OutputName "YTDConverterSetup-smoke"
   ; Use a different AppId for smoke builds so they don't leave a second uninstall entry.
   #define AppGuid "4E67F0D5-0F48-4F89-8A44-8AD8C2E3F1B1"
 #endif
