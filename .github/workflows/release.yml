@@ -73,7 +73,7 @@ jobs:
       - name: Pre-seed runtime tools for self-tests
         shell: pwsh
         run: |
-          $dataDir = Join-Path $env:RUNNER_TEMP "mini-url-converter-data"
+          $dataDir = Join-Path $env:RUNNER_TEMP "ytd-converter-data"
           $toolsDir = Join-Path $dataDir "tools"
           New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
 
@@ -89,6 +89,7 @@ jobs:
           Copy-Item $ffmpeg.FullName (Join-Path $toolsDir "ffmpeg.exe") -Force
           Copy-Item $ffprobe.FullName (Join-Path $toolsDir "ffprobe.exe") -Force
 
+          "YTD_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
           "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
 
       - name: Build installer and run smoke tests
@@ -101,16 +102,18 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
+          Copy-Item "installer\Output\MiniURLConverterSetup.exe" "installer\Output\YTDConverterSetup-$version.exe"
           Copy-Item "installer\Output\MiniURLConverterSetup.exe" "installer\Output\MiniURLConverterSetup-$version.exe"
-          Copy-Item "dist\mini_url_converter.exe" "dist\MiniURLConverter-$version.exe"
+          Copy-Item "dist\mini_url_converter.exe" "dist\YTDConverter-$version.exe"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: MiniURLConverter-${{ steps.version.outputs.version }}
+          name: YTDConverter-${{ steps.version.outputs.version }}
           path: |
+            installer/Output/YTDConverterSetup-${{ steps.version.outputs.version }}.exe
             installer/Output/MiniURLConverterSetup-${{ steps.version.outputs.version }}.exe
-            dist/MiniURLConverter-${{ steps.version.outputs.version }}.exe
+            dist/YTDConverter-${{ steps.version.outputs.version }}.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -122,12 +125,13 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $version = "${{ steps.version.outputs.version }}"
-          $installer = "installer\Output\MiniURLConverterSetup-$version.exe"
-          $standalone = "dist\MiniURLConverter-$version.exe"
+          $installer = "installer\Output\YTDConverterSetup-$version.exe"
+          $legacyInstaller = "installer\Output\MiniURLConverterSetup-$version.exe"
+          $standalone = "dist\YTDConverter-$version.exe"
 
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $installer $standalone --clobber --repo $env:GITHUB_REPOSITORY
+            gh release upload $tag $installer $legacyInstaller $standalone --clobber --repo $env:GITHUB_REPOSITORY
           } else {
-            gh release create $tag $installer $standalone --title $tag --generate-notes --repo $env:GITHUB_REPOSITORY
+            gh release create $tag $installer $legacyInstaller $standalone --title "$tag — YTD Converter" --generate-notes --repo $env:GITHUB_REPOSITORY
           }
