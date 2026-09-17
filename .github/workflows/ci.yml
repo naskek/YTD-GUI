@@ -44,7 +44,7 @@ jobs:
       - name: Pre-seed runtime tools for self-tests
         shell: pwsh
         run: |
-          $dataDir = Join-Path $env:RUNNER_TEMP "mini-url-converter-data"
+          $dataDir = Join-Path $env:RUNNER_TEMP "ytd-converter-data"
           $toolsDir = Join-Path $dataDir "tools"
           New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
 
@@ -60,6 +60,7 @@ jobs:
           Copy-Item $ffmpeg.FullName (Join-Path $toolsDir "ffmpeg.exe") -Force
           Copy-Item $ffprobe.FullName (Join-Path $toolsDir "ffprobe.exe") -Force
 
+          "YTD_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
           "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
 
       - name: Source syntax and release self-test
@@ -76,9 +77,9 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
-          name: MiniURLConverter-${{ github.sha }}
+          name: YTDConverter-${{ github.sha }}
           path: |
             dist/mini_url_converter.exe
-            installer/Output/MiniURLConverterSetup.exe
+            installer/Output/YTDConverterSetup.exe
           if-no-files-found: error
           retention-days: 14

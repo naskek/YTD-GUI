@@ -1,12 +1,63 @@
 from __future__ import annotations
 
+import os
+import shutil
 import sys
 from pathlib import Path
 import tkinter as tk
 
 from PIL import Image, ImageOps, ImageTk
 
+
+BRAND_NAME = "YTD Converter"
+LEGACY_BRAND_NAME = "Mini URL Converter"
+NEW_DATA_ENV = "YTD_CONVERTER_DATA_DIR"
+LEGACY_DATA_ENV = "MINI_URL_CONVERTER_DATA_DIR"
+
+
+def _prepare_app_data_dir() -> None:
+    """Resolve the v1.2 data directory before the legacy core module imports."""
+    explicit = os.environ.get(NEW_DATA_ENV) or os.environ.get(LEGACY_DATA_ENV)
+    if explicit:
+        # The legacy core still reads MINI_URL_CONVERTER_DATA_DIR internally.
+        # Mirror the new override into the old variable until that core module
+        # is eventually renamed in a separate internal refactor.
+        os.environ[LEGACY_DATA_ENV] = explicit
+        return
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    root = Path(local_app_data) if local_app_data else (Path.home() / "AppData" / "Local")
+    new_dir = root / BRAND_NAME
+    legacy_dir = root / LEGACY_BRAND_NAME
+
+    if not new_dir.exists() and legacy_dir.exists():
+        try:
+            # Both locations are on LOCALAPPDATA, so this is normally a cheap
+            # directory rename even when the managed FFmpeg tools are large.
+            shutil.move(str(legacy_dir), str(new_dir))
+        except OSError:
+            # Never lose settings/cookies/tools just because migration failed.
+            # Fall back to the legacy directory for this run and retry on a
+            # later launch when the directory is no longer locked.
+            os.environ[LEGACY_DATA_ENV] = str(legacy_dir)
+            return
+
+    os.environ[LEGACY_DATA_ENV] = str(new_dir)
+
+
+_prepare_app_data_dir()
+
 import mini_url_converter as core
+
+# Apply the public brand before the release/UI layers import the legacy core.
+# Internal module/file names can stay stable while the shipped product is YTD Converter.
+core.APP_TITLE = BRAND_NAME
+core.DEFAULT_DOWNLOADS_DIR = Path.home() / "Downloads" / BRAND_NAME
+for _language in ("en", "ru"):
+    if _language in core.TRANSLATIONS:
+        core.TRANSLATIONS[_language]["app_title"] = BRAND_NAME
+
+import launcher as launcher_layer
 import release_app as release_layer
 import ui_polish as previous
 
@@ -112,6 +163,34 @@ def _draw_asset_icon(self: previous.RoundedButton, cx: float, cy: float, color: 
     self.create_image(cx, cy, image=image, anchor="center")
 
 
+def _find_installer_asset(assets: object, version: str) -> str:
+    if not isinstance(assets, list):
+        return ""
+
+    preferred_names = (
+        f"YTDConverterSetup-{version}.exe".lower(),
+        f"MiniURLConverterSetup-{version}.exe".lower(),
+    )
+    for preferred in preferred_names:
+        for asset in assets:
+            if not isinstance(asset, dict):
+                continue
+            name = str(asset.get("name", ""))
+            url = str(asset.get("browser_download_url", ""))
+            if name.lower() == preferred and url:
+                return url
+
+    for prefix in ("ytdconvertersetup", "miniurlconvertersetup"):
+        for asset in assets:
+            if not isinstance(asset, dict):
+                continue
+            name = str(asset.get("name", ""))
+            url = str(asset.get("browser_download_url", ""))
+            if name.lower().startswith(prefix) and name.lower().endswith(".exe") and url:
+                return url
+    return ""
+
+
 # RoundedButton remains responsible for hover/disabled states and rounded
 # geometry; only its hand-drawn icon layer is replaced with real PNG assets.
 previous.RoundedButton._draw_icon = _draw_asset_icon  # type: ignore[method-assign]
@@ -121,6 +200,17 @@ class App(previous.App):
     def __init__(self, root: tk.Tk) -> None:
         self._log_restore_height: int | None = None
         super().__init__(root)
+
+    def fetch_latest_app_release(self) -> dict[str, str]:
+        """Prefer YTD Converter release assets while accepting legacy names."""
+        payload = self.fetch_json(launcher_layer.APP_RELEASE_API, timeout_seconds=core.NETWORK_TIMEOUT_SECONDS)
+        tag = payload.get("tag_name")
+        if not isinstance(tag, str) or not tag.strip():
+            raise core.AppError("GitHub API did not return an application release tag.")
+        version = launcher_layer.normalize_version(tag)
+        installer_url = _find_installer_asset(payload.get("assets"), version)
+        html_url = str(payload.get("html_url", launcher_layer.APP_RELEASE_PAGE))
+        return {"version": version, "installer_url": installer_url, "html_url": html_url}
 
     def _refresh_log_toggle_text(self) -> None:
         button = getattr(self, "log_toggle_button", None)
@@ -196,6 +286,14 @@ def self_test() -> int:
     if previous.self_test() != 0:
         return 1
     errors: list[str] = []
+    if core.APP_TITLE != BRAND_NAME:
+        errors.append(f"Brand title mismatch: {core.APP_TITLE}")
+    if core.DEFAULT_DOWNLOADS_DIR.name != BRAND_NAME:
+        errors.append(f"Default downloads folder mismatch: {core.DEFAULT_DOWNLOADS_DIR}")
+    probe_url = "https://example.invalid/YTDConverterSetup.exe"
+    probe_assets = [{"name": "YTDConverterSetup-1.2.0.exe", "browser_download_url": probe_url}]
+    if _find_installer_asset(probe_assets, "1.2.0") != probe_url:
+        errors.append("YTD Converter installer asset selection failed.")
     for icon_key, filename in ICON_FILES.items():
         path = icon_path(icon_key)
         if not path.is_file():
