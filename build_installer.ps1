@@ -16,13 +16,17 @@ $ToolsDir = Join-Path $ProjectRoot 'tools'
 $InstallerScript = Join-Path $ProjectRoot 'installer\mini_url_converter.iss'
 $InnoDir = Join-Path $ProjectRoot 'tools\inno'
 $IsccExe = Join-Path $InnoDir 'ISCC.exe'
+$PyInstallerVersion = '6.22.2'
 
 function Get-PythonLauncher {
-    if (Get-Command -Name py -ErrorAction SilentlyContinue) {
-        return [pscustomobject]@{ FilePath = 'py'; PrefixArgs = @('-3') }
-    }
+    # Prefer the active PATH Python. GitHub Actions setup-python puts the
+    # requested interpreter first, while the Windows py launcher may select
+    # a different globally installed version.
     if (Get-Command -Name python -ErrorAction SilentlyContinue) {
         return [pscustomobject]@{ FilePath = 'python'; PrefixArgs = @() }
+    }
+    if (Get-Command -Name py -ErrorAction SilentlyContinue) {
+        return [pscustomobject]@{ FilePath = 'py'; PrefixArgs = @('-3') }
     }
     throw 'Python was not found in PATH.'
 }
@@ -93,20 +97,16 @@ function Invoke-WindowedSelfTest {
     }
 }
 
-function Ensure-InnoSetup {
-    if (Test-Path -LiteralPath $IsccExe -PathType Leaf) {
-        return
-    }
-
+function Install-LocalInnoSetup {
     New-Item -ItemType Directory -Path $InnoDir -Force | Out-Null
 
-    # Use official redirect; version may change.
+    # Developer-machine fallback. CI installs Inno Setup explicitly and uses
+    # the system compiler instead of depending on this download redirect.
     $installerUrl = 'https://jrsoftware.org/download.php/is.exe'
     $installerPath = Join-Path $InnoDir 'innosetup-installer.exe'
     Write-Host "[INFO] Downloading Inno Setup installer..."
     Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
 
-    # Install into tools\inno so builds are reproducible in this workspace.
     Write-Host "[INFO] Installing Inno Setup (silent)..."
     $args = @(
         '/VERYSILENT',
@@ -125,14 +125,48 @@ function Ensure-InnoSetup {
     }
 }
 
+function Resolve-InnoCompiler {
+    $override = [Environment]::GetEnvironmentVariable('INNO_SETUP_ISCC', 'Process')
+    if (-not [string]::IsNullOrWhiteSpace($override)) {
+        if (Test-Path -LiteralPath $override -PathType Leaf) {
+            return $override
+        }
+        throw "INNO_SETUP_ISCC points to a missing file: $override"
+    }
+
+    if (Test-Path -LiteralPath $IsccExe -PathType Leaf) {
+        return $IsccExe
+    }
+
+    $candidates = @()
+    $programFilesX86 = ${env:ProgramFiles(x86)}
+    if (-not [string]::IsNullOrWhiteSpace($programFilesX86)) {
+        $candidates += (Join-Path $programFilesX86 'Inno Setup 6\ISCC.exe')
+        $candidates += (Join-Path $programFilesX86 'Inno Setup 7\ISCC.exe')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)) {
+        $candidates += (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+        $candidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
+    }
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            Write-Host "[INFO] Using installed Inno Setup compiler: $candidate"
+            return $candidate
+        }
+    }
+
+    Install-LocalInnoSetup
+    return $IsccExe
+}
+
 function Build-Exe {
     $python = Get-PythonLauncher
     & $python.FilePath @($python.PrefixArgs + @('-c', 'import PyInstaller'))
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[INFO] PyInstaller is missing; installing it..."
-        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','pip','install','pyinstaller'))
+        Write-Host "[INFO] PyInstaller is missing; installing version $PyInstallerVersion..."
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','pip','install',("pyinstaller==" + $PyInstallerVersion)))
     }
-    # Use spec so settings like embedded icon stay consistent across builds.
     Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','PyInstaller','--noconfirm','--clean','mini_url_converter.spec'))
     if (-not (Test-Path -LiteralPath (Join-Path $DistDir 'mini_url_converter.exe') -PathType Leaf)) {
         throw "Built exe not found in dist: $DistDir"
@@ -140,13 +174,13 @@ function Build-Exe {
 }
 
 function Build-Installer {
-    Ensure-InnoSetup
-    Invoke-ExternalCommand -FilePath $IsccExe -Arguments @($InstallerScript) -WorkingDirectory $ProjectRoot
+    $compiler = Resolve-InnoCompiler
+    Invoke-ExternalCommand -FilePath $compiler -Arguments @($InstallerScript) -WorkingDirectory $ProjectRoot
 }
 
 function Build-SmokeInstaller {
-    Ensure-InnoSetup
-    Invoke-ExternalCommand -FilePath $IsccExe -Arguments @('/DSmokeBuild=1', $InstallerScript) -WorkingDirectory $ProjectRoot
+    $compiler = Resolve-InnoCompiler
+    Invoke-ExternalCommand -FilePath $compiler -Arguments @('/DSmokeBuild=1', $InstallerScript) -WorkingDirectory $ProjectRoot
 }
 
 function Smoke-Test {
@@ -178,7 +212,13 @@ function Smoke-Test {
         }
 
         $installedExe = Join-Path $testAppDir 'mini_url_converter.exe'
-        Invoke-WindowedSelfTest -ExePath $installedExe -DataDirectory $testAppDir
+        $smokeDataDir = [Environment]::GetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', 'Process')
+        if ([string]::IsNullOrWhiteSpace($smokeDataDir)) {
+            $smokeDataDir = $testAppDir
+        } else {
+            Write-Host "[INFO] Reusing pre-seeded self-test data dir: $smokeDataDir"
+        }
+        Invoke-WindowedSelfTest -ExePath $installedExe -DataDirectory $smokeDataDir
         Write-Host "[OK] Installed application smoke test passed."
     } finally {
         if (Test-Path -LiteralPath $testRoot) {

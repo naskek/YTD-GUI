@@ -1,0 +1,126 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to embed in the installer (for example 1.2.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows-release:
+    name: Build Windows release
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "push") {
+            $raw = "${{ github.ref_name }}"
+          } else {
+            $raw = "${{ inputs.version }}"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($raw)) {
+            $raw = "0.0.0-dev"
+          }
+
+          $normalized = $raw -replace '^v', ''
+          if ($normalized -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') {
+            throw "Unsupported version format: $raw"
+          }
+
+          "version=$normalized" >> $env:GITHUB_OUTPUT
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller==6.22.2" yt-dlp
+          choco install ffmpeg -y --no-progress --limit-output
+          choco install innosetup --version=6.7.1 -y --no-progress --limit-output
+
+      - name: Pre-seed runtime tools for self-tests
+        shell: pwsh
+        run: |
+          $dataDir = Join-Path $env:RUNNER_TEMP "mini-url-converter-data"
+          $toolsDir = Join-Path $dataDir "tools"
+          New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
+
+          $ytDlp = (Get-Command yt-dlp.exe -ErrorAction Stop).Source
+          $ffmpegRoot = Join-Path $env:ChocolateyInstall "lib\ffmpeg\tools"
+          $ffmpeg = Get-ChildItem $ffmpegRoot -Recurse -File -Filter "ffmpeg.exe" | Select-Object -First 1
+          $ffprobe = Get-ChildItem $ffmpegRoot -Recurse -File -Filter "ffprobe.exe" | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) {
+            throw "Real FFmpeg binaries were not found under $ffmpegRoot"
+          }
+
+          Copy-Item $ytDlp (Join-Path $toolsDir "yt-dlp.exe") -Force
+          Copy-Item $ffmpeg.FullName (Join-Path $toolsDir "ffmpeg.exe") -Force
+          Copy-Item $ffprobe.FullName (Join-Path $toolsDir "ffprobe.exe") -Force
+
+          "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
+
+      - name: Build installer and run smoke tests
+        shell: pwsh
+        env:
+          YTD_GUI_VERSION: ${{ steps.version.outputs.version }}
+        run: .\build_installer.ps1
+
+      - name: Prepare versioned assets
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Copy-Item "installer\Output\MiniURLConverterSetup.exe" "installer\Output\MiniURLConverterSetup-$version.exe"
+          Copy-Item "dist\mini_url_converter.exe" "dist\MiniURLConverter-$version.exe"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MiniURLConverter-${{ steps.version.outputs.version }}
+          path: |
+            installer/Output/MiniURLConverterSetup-${{ steps.version.outputs.version }}.exe
+            dist/MiniURLConverter-${{ steps.version.outputs.version }}.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = "${{ steps.version.outputs.version }}"
+          $installer = "installer\Output\MiniURLConverterSetup-$version.exe"
+          $standalone = "dist\MiniURLConverter-$version.exe"
+
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $installer $standalone --clobber --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $tag $installer $standalone --title $tag --generate-notes --repo $env:GITHUB_REPOSITORY
+          }

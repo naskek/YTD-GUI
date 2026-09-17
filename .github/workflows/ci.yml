@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-build:
+    name: Windows build and smoke test
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      YTD_GUI_VERSION: "1.1.0"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          check-latest: false
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller==6.22.2" yt-dlp
+          choco install ffmpeg -y --no-progress --limit-output
+          choco install innosetup --version=6.7.1 -y --no-progress --limit-output
+
+      - name: Pre-seed runtime tools for self-tests
+        shell: pwsh
+        run: |
+          $dataDir = Join-Path $env:RUNNER_TEMP "mini-url-converter-data"
+          $toolsDir = Join-Path $dataDir "tools"
+          New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
+
+          $ytDlp = (Get-Command yt-dlp.exe -ErrorAction Stop).Source
+          $ffmpegRoot = Join-Path $env:ChocolateyInstall "lib\ffmpeg\tools"
+          $ffmpeg = Get-ChildItem $ffmpegRoot -Recurse -File -Filter "ffmpeg.exe" | Select-Object -First 1
+          $ffprobe = Get-ChildItem $ffmpegRoot -Recurse -File -Filter "ffprobe.exe" | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) {
+            throw "Real FFmpeg binaries were not found under $ffmpegRoot"
+          }
+
+          Copy-Item $ytDlp (Join-Path $toolsDir "yt-dlp.exe") -Force
+          Copy-Item $ffmpeg.FullName (Join-Path $toolsDir "ffmpeg.exe") -Force
+          Copy-Item $ffprobe.FullName (Join-Path $toolsDir "ffprobe.exe") -Force
+
+          "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
+
+      - name: Build and run smoke tests
+        shell: pwsh
+        run: .\build_installer.ps1
+
+      - name: Upload CI build
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: MiniURLConverter-${{ github.sha }}
+          path: |
+            dist/mini_url_converter.exe
+            installer/Output/MiniURLConverterSetup.exe
+          if-no-files-found: error
+          retention-days: 14
