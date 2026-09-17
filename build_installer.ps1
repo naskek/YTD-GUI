@@ -12,8 +12,7 @@ $ProgressPreference = 'SilentlyContinue'
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BuildDir = Join-Path $ProjectRoot 'build'
 $DistDir = Join-Path $ProjectRoot 'dist'
-$ToolsDir = Join-Path $ProjectRoot 'tools'
-$InstallerScript = Join-Path $ProjectRoot 'installer\mini_url_converter.iss'
+$InstallerScript = Join-Path $ProjectRoot 'installer\ytd_converter.iss'
 $InnoDir = Join-Path $ProjectRoot 'tools\inno'
 $IsccExe = Join-Path $InnoDir 'ISCC.exe'
 $PyInstallerVersion = '6.22.2'
@@ -155,8 +154,8 @@ function Ensure-PythonBuildDependencies {
 function Build-Exe {
     Ensure-PythonBuildDependencies
     $python = Get-PythonLauncher
-    Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','PyInstaller','--noconfirm','--clean','mini_url_converter.spec'))
-    if (-not (Test-Path -LiteralPath (Join-Path $DistDir 'mini_url_converter.exe') -PathType Leaf)) {
+    Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','PyInstaller','--noconfirm','--clean','ytd_converter.spec'))
+    if (-not (Test-Path -LiteralPath (Join-Path $DistDir 'YTDConverter.exe') -PathType Leaf)) {
         throw "Built exe not found in dist: $DistDir"
     }
 }
@@ -243,7 +242,7 @@ try {
         Build-Exe
 
         Write-Stage 'Built EXE self-test'
-        Invoke-WindowedSelfTest -ExePath (Join-Path $DistDir 'mini_url_converter.exe')
+        Invoke-WindowedSelfTest -ExePath (Join-Path $DistDir 'YTDConverter.exe')
     }
 
     Write-Stage 'Build release installer'
@@ -255,7 +254,7 @@ try {
     }
 
     Write-Stage 'Build completed successfully'
-    Write-Host "[OK] EXE: $(Join-Path $DistDir 'mini_url_converter.exe')"
+    Write-Host "[OK] EXE: $(Join-Path $DistDir 'YTDConverter.exe')"
     Write-Host "[OK] Installer: $(Join-Path $ProjectRoot 'installer\Output\YTDConverterSetup.exe')"
     exit 0
 } catch {
