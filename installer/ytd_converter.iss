@@ -30,7 +30,7 @@ DefaultDirName={autopf}\YTD Converter
 DefaultGroupName=YTD Converter
 DisableProgramGroupPage=yes
 OutputBaseFilename={#OutputName}
-SetupIconFile=..\img\mini_url_converter.ico
+SetupIconFile=..\img\ytd_converter.ico
 UninstallDisplayIcon={app}\YTDConverter.exe
 Compression=lzma2
 SolidCompression=yes
@@ -43,9 +43,8 @@ Uninstallable={#Uninstallable}
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\mini_url_converter.exe"; DestDir: "{app}"; DestName: "YTDConverter.exe"; Flags: ignoreversion
+Source: "..\dist\YTDConverter.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Runtime tools are stored in user-writable app data and maintained by the update center.
-; The experimental Chrome bridge stays in source control but is intentionally not shipped in v1.2.0.
 
 [InstallDelete]
 ; v1.1.x installed the executable under the legacy product name. Keep the same

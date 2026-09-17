@@ -79,7 +79,7 @@ jobs:
         with:
           name: YTDConverter-${{ github.sha }}
           path: |
-            dist/mini_url_converter.exe
+            dist/YTDConverter.exe
             installer/Output/YTDConverterSetup.exe
           if-no-files-found: error
           retention-days: 14

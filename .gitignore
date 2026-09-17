@@ -1,31 +1,4 @@
-# Python bytecode and caches
-__pycache__/
-*.py[cod]
-
-# Local virtual environments
-.venv/
-venv/
-env/
-
-# Editor settings
-.vscode/
-
-# PyInstaller build output
-build/
-dist/
-installer/Output/
-tools/inno/
-
-# App runtime data
-.mini_url_converter.settings.json
-downloads/
-
-# Temporary files
-*.tmp
-*.bak
-*.new
-
-# --- Python ---
+# Python
 __pycache__/
 *.py[cod]
 *.pyd
@@ -36,16 +9,23 @@ __pycache__/
 .coverage
 htmlcov/
 
-# --- Virtual environments ---
+# Virtual environments
 .venv/
 venv/
 env/
 
-# --- Build artifacts ---
+# Build artifacts
 build/
 dist/
+installer/Output/
+tools/inno/
 
-# --- Local environment / secrets ---
+# Local runtime/developer data
+.mini_url_converter.settings.json
+.ytd_converter.settings.json
+downloads/
+
+# Local environment / secrets
 .env
 .env.*
 !.env.example
@@ -54,16 +34,16 @@ dist/
 *.pfx
 *.p12
 
-# --- IDE / OS ---
+# IDE / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# --- Temporary files ---
+# Temporary files
 *.tmp
 *.bak
+*.new
 *.log
-
-build_log.txt
 *.patch
+build_log.txt
