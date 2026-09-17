@@ -152,11 +152,13 @@ function Ensure-PythonBuildDependencies {
 }
 
 function Build-Exe {
-    Ensure-PythonBuildDependencies
     $python = Get-PythonLauncher
     Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','PyInstaller','--noconfirm','--clean','ytd_converter.spec'))
-    if (-not (Test-Path -LiteralPath (Join-Path $DistDir 'YTDConverter.exe') -PathType Leaf)) {
-        throw "Built exe not found in dist: $DistDir"
+    Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','PyInstaller','--noconfirm','--clean','ytd_updater.spec'))
+    foreach ($name in @('YTDConverter.exe', 'YTDUpdater.exe')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $DistDir $name) -PathType Leaf)) {
+            throw "Built exe not found in dist: $name"
+        }
     }
 }
 
@@ -192,6 +194,13 @@ function Smoke-Test {
         }
 
         $installedExe = Join-Path $testAppDir 'YTDConverter.exe'
+        $installedUpdater = Join-Path $testAppDir 'YTDUpdater.exe'
+        foreach ($path in @($installedExe, $installedUpdater)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "Smoke install is missing required file: $path"
+            }
+        }
+
         $smokeDataDir = [Environment]::GetEnvironmentVariable('YTD_CONVERTER_DATA_DIR', 'Process')
         if ([string]::IsNullOrWhiteSpace($smokeDataDir)) {
             $smokeDataDir = [Environment]::GetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', 'Process')
@@ -202,7 +211,8 @@ function Smoke-Test {
             Write-Host "[INFO] Reusing pre-seeded self-test data dir: $smokeDataDir"
         }
         Invoke-WindowedSelfTest -ExePath $installedExe -DataDirectory $smokeDataDir
-        Write-Host "[OK] Installed application smoke test passed."
+        Invoke-WindowedSelfTest -ExePath $installedUpdater
+        Write-Host "[OK] Installed application and updater smoke tests passed."
     } finally {
         if (Test-Path -LiteralPath $testRoot) {
             Write-Host "[INFO] Removing smoke installation: $testRoot"
@@ -218,6 +228,9 @@ try {
         Write-Stage 'Clean old build and dist'
         Clear-BuildArtifacts
 
+        Write-Stage 'Ensure Python build dependencies'
+        Ensure-PythonBuildDependencies
+
         $python = Get-PythonLauncher
         Write-Stage 'Python syntax check'
         Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @(
@@ -232,17 +245,23 @@ try {
             'app\release_app.py',
             'app\ui_polish.py',
             'app\ui_assets.py',
+            'app\mp3_progress.py',
+            'app\self_update.py',
+            'app\inplace_update.py',
+            'app\updater_main.py',
             'app\version.py'
         ))
 
-        Write-Stage 'Source self-test'
-        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('app\ui_assets.py','--self-test'))
+        Write-Stage 'Source self-tests'
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('app\inplace_update.py','--self-test'))
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('app\updater_main.py','--self-test'))
 
-        Write-Stage 'Build PyInstaller EXE'
+        Write-Stage 'Build PyInstaller EXEs'
         Build-Exe
 
-        Write-Stage 'Built EXE self-test'
+        Write-Stage 'Built EXE self-tests'
         Invoke-WindowedSelfTest -ExePath (Join-Path $DistDir 'YTDConverter.exe')
+        Invoke-WindowedSelfTest -ExePath (Join-Path $DistDir 'YTDUpdater.exe')
     }
 
     Write-Stage 'Build release installer'
@@ -255,6 +274,7 @@ try {
 
     Write-Stage 'Build completed successfully'
     Write-Host "[OK] EXE: $(Join-Path $DistDir 'YTDConverter.exe')"
+    Write-Host "[OK] Updater: $(Join-Path $DistDir 'YTDUpdater.exe')"
     Write-Host "[OK] Installer: $(Join-Path $ProjectRoot 'installer\Output\YTDConverterSetup.exe')"
     exit 0
 } catch {
