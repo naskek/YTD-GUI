@@ -1,0 +1,1 @@
+Runtime-sized PNG icons are generated from the source assets in the parent directory. Keep the parent PNG files as editable sources.
