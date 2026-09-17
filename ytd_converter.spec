@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\mp3_progress.py'],
+    ['app\\self_update.py'],
     pathex=[],
     binaries=[],
     datas=[('assets\\icons', 'assets\\icons')],
