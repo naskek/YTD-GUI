@@ -19,9 +19,6 @@ $IsccExe = Join-Path $InnoDir 'ISCC.exe'
 $PyInstallerVersion = '6.22.2'
 
 function Get-PythonLauncher {
-    # Prefer the active PATH Python. GitHub Actions setup-python puts the
-    # requested interpreter first, while the Windows py launcher may select
-    # a different globally installed version.
     if (Get-Command -Name python -ErrorAction SilentlyContinue) {
         return [pscustomobject]@{ FilePath = 'python'; PrefixArgs = @() }
     }
@@ -81,9 +78,11 @@ function Invoke-WindowedSelfTest {
         throw "Self-test executable was not found: $ExePath"
     }
 
-    $oldDataDirectory = [Environment]::GetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', 'Process')
+    $oldYtdDataDirectory = [Environment]::GetEnvironmentVariable('YTD_CONVERTER_DATA_DIR', 'Process')
+    $oldLegacyDataDirectory = [Environment]::GetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', 'Process')
     try {
         if ($DataDirectory) {
+            [Environment]::SetEnvironmentVariable('YTD_CONVERTER_DATA_DIR', $DataDirectory, 'Process')
             [Environment]::SetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', $DataDirectory, 'Process')
         }
         Write-Host "[RUN] $ExePath --self-test"
@@ -93,33 +92,24 @@ function Invoke-WindowedSelfTest {
             throw "Self-test failed with exit code $($process.ExitCode): $ExePath"
         }
     } finally {
-        [Environment]::SetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', $oldDataDirectory, 'Process')
+        [Environment]::SetEnvironmentVariable('YTD_CONVERTER_DATA_DIR', $oldYtdDataDirectory, 'Process')
+        [Environment]::SetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', $oldLegacyDataDirectory, 'Process')
     }
 }
 
 function Install-LocalInnoSetup {
     New-Item -ItemType Directory -Path $InnoDir -Force | Out-Null
-
-    # Developer-machine fallback. CI installs Inno Setup explicitly and uses
-    # the system compiler instead of depending on this download redirect.
     $installerUrl = 'https://jrsoftware.org/download.php/is.exe'
     $installerPath = Join-Path $InnoDir 'innosetup-installer.exe'
     Write-Host "[INFO] Downloading Inno Setup installer..."
     Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
 
     Write-Host "[INFO] Installing Inno Setup (silent)..."
-    $args = @(
-        '/VERYSILENT',
-        '/SUPPRESSMSGBOXES',
-        '/NORESTART',
-        '/SP-',
-        ('/DIR=' + $InnoDir)
-    )
+    $args = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',('/DIR=' + $InnoDir))
     $proc = Start-Process -FilePath $installerPath -ArgumentList $args -Wait -PassThru
     if ($proc.ExitCode -ne 0) {
         throw "Inno Setup installer failed with exit code $($proc.ExitCode)"
     }
-
     if (-not (Test-Path -LiteralPath $IsccExe -PathType Leaf)) {
         throw "ISCC.exe was not found after installation: $IsccExe"
     }
@@ -128,15 +118,10 @@ function Install-LocalInnoSetup {
 function Resolve-InnoCompiler {
     $override = [Environment]::GetEnvironmentVariable('INNO_SETUP_ISCC', 'Process')
     if (-not [string]::IsNullOrWhiteSpace($override)) {
-        if (Test-Path -LiteralPath $override -PathType Leaf) {
-            return $override
-        }
+        if (Test-Path -LiteralPath $override -PathType Leaf) { return $override }
         throw "INNO_SETUP_ISCC points to a missing file: $override"
     }
-
-    if (Test-Path -LiteralPath $IsccExe -PathType Leaf) {
-        return $IsccExe
-    }
+    if (Test-Path -LiteralPath $IsccExe -PathType Leaf) { return $IsccExe }
 
     $candidates = @()
     $programFilesX86 = ${env:ProgramFiles(x86)}
@@ -148,14 +133,12 @@ function Resolve-InnoCompiler {
         $candidates += (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
         $candidates += (Join-Path $env:ProgramFiles 'Inno Setup 7\ISCC.exe')
     }
-
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) {
             Write-Host "[INFO] Using installed Inno Setup compiler: $candidate"
             return $candidate
         }
     }
-
     Install-LocalInnoSetup
     return $IsccExe
 }
@@ -190,34 +173,30 @@ function Build-SmokeInstaller {
 
 function Smoke-Test {
     Build-SmokeInstaller
-    $setupExe = Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'installer\\Output') -File -Filter 'MiniURLConverterSetup-smoke*.exe' |
+    $setupExe = Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'installer\Output') -File -Filter 'YTDConverterSetup-smoke*.exe' |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $setupExe) {
-        throw "Smoke installer exe was not found in installer\\Output."
+        throw "Smoke installer exe was not found in installer\Output."
     }
 
-    $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("mini-url-converter-install-" + [guid]::NewGuid().ToString('N'))
+    $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("ytd-converter-install-" + [guid]::NewGuid().ToString('N'))
     $testAppDir = Join-Path $testRoot 'app'
     try {
         New-Item -ItemType Directory -Path $testAppDir -Force | Out-Null
 
         Write-Host "[INFO] Installing into: $testAppDir"
-        $installArgs = @(
-            '/VERYSILENT',
-            '/SUPPRESSMSGBOXES',
-            '/NORESTART',
-            '/NOICONS',
-            '/SP-',
-            ('/DIR=' + $testAppDir)
-        )
+        $installArgs = @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NOICONS','/SP-',('/DIR=' + $testAppDir))
         $proc = Start-Process -FilePath $setupExe.FullName -ArgumentList $installArgs -Wait -PassThru
         Write-Host "[INFO] Installer exit code: $($proc.ExitCode)"
         if ($proc.ExitCode -ne 0) {
             throw "Silent install failed (exit code $($proc.ExitCode))."
         }
 
-        $installedExe = Join-Path $testAppDir 'mini_url_converter.exe'
-        $smokeDataDir = [Environment]::GetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', 'Process')
+        $installedExe = Join-Path $testAppDir 'YTDConverter.exe'
+        $smokeDataDir = [Environment]::GetEnvironmentVariable('YTD_CONVERTER_DATA_DIR', 'Process')
+        if ([string]::IsNullOrWhiteSpace($smokeDataDir)) {
+            $smokeDataDir = [Environment]::GetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', 'Process')
+        }
         if ([string]::IsNullOrWhiteSpace($smokeDataDir)) {
             $smokeDataDir = $testAppDir
         } else {
@@ -277,7 +256,7 @@ try {
 
     Write-Stage 'Build completed successfully'
     Write-Host "[OK] EXE: $(Join-Path $DistDir 'mini_url_converter.exe')"
-    Write-Host "[OK] Installer: $(Join-Path $ProjectRoot 'installer\Output\MiniURLConverterSetup.exe')"
+    Write-Host "[OK] Installer: $(Join-Path $ProjectRoot 'installer\Output\YTDConverterSetup.exe')"
     exit 0
 } catch {
     Write-Host ""
