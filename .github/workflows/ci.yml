@@ -48,12 +48,16 @@ jobs:
           New-Item -ItemType Directory -Path $toolsDir -Force | Out-Null
 
           $ytDlp = (Get-Command yt-dlp.exe -ErrorAction Stop).Source
-          $ffmpeg = (Get-Command ffmpeg.exe -ErrorAction Stop).Source
-          $ffprobe = (Get-Command ffprobe.exe -ErrorAction Stop).Source
+          $ffmpegRoot = Join-Path $env:ChocolateyInstall "lib\ffmpeg\tools"
+          $ffmpeg = Get-ChildItem $ffmpegRoot -Recurse -File -Filter "ffmpeg.exe" | Select-Object -First 1
+          $ffprobe = Get-ChildItem $ffmpegRoot -Recurse -File -Filter "ffprobe.exe" | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) {
+            throw "Real FFmpeg binaries were not found under $ffmpegRoot"
+          }
 
           Copy-Item $ytDlp (Join-Path $toolsDir "yt-dlp.exe") -Force
-          Copy-Item $ffmpeg (Join-Path $toolsDir "ffmpeg.exe") -Force
-          Copy-Item $ffprobe (Join-Path $toolsDir "ffprobe.exe") -Force
+          Copy-Item $ffmpeg.FullName (Join-Path $toolsDir "ffmpeg.exe") -Force
+          Copy-Item $ffprobe.FullName (Join-Path $toolsDir "ffprobe.exe") -Force
 
           "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
 
