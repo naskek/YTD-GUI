@@ -237,10 +237,10 @@ try {
 
         $python = Get-PythonLauncher
         Write-Stage 'Python syntax check'
-        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','py_compile','app\mini_url_converter.py'))
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','py_compile','app\mini_url_converter.py','app\launcher.py','app\version.py'))
 
         Write-Stage 'Source self-test'
-        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('app\mini_url_converter.py','--self-test'))
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('app\launcher.py','--self-test'))
 
         Write-Stage 'Build PyInstaller EXE'
         Build-Exe

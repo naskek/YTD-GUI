@@ -21,7 +21,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     env:
-      YTD_GUI_VERSION: "1.1.0"
+      YTD_GUI_VERSION: "1.2.0"
 
     steps:
       - name: Checkout
