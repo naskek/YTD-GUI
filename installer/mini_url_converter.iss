@@ -44,6 +44,8 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 Source: "..\dist\mini_url_converter.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\chrome_native_host.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\chrome_extension\*"; DestDir: "{app}\chrome_extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Runtime tools are stored in user-writable app data and maintained by the update center.
 
 [Icons]

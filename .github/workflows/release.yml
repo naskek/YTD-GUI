@@ -95,7 +95,7 @@ jobs:
         shell: pwsh
         env:
           YTD_GUI_VERSION: ${{ steps.version.outputs.version }}
-        run: .\build_installer.ps1
+        run: .\build_chrome_bridge.ps1
 
       - name: Prepare versioned assets
         shell: pwsh
@@ -103,6 +103,7 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           Copy-Item "installer\Output\MiniURLConverterSetup.exe" "installer\Output\MiniURLConverterSetup-$version.exe"
           Copy-Item "dist\mini_url_converter.exe" "dist\MiniURLConverter-$version.exe"
+          Copy-Item "dist\chrome_native_host.exe" "dist\ChromeNativeHost-$version.exe"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -111,6 +112,7 @@ jobs:
           path: |
             installer/Output/MiniURLConverterSetup-${{ steps.version.outputs.version }}.exe
             dist/MiniURLConverter-${{ steps.version.outputs.version }}.exe
+            dist/ChromeNativeHost-${{ steps.version.outputs.version }}.exe
           if-no-files-found: error
           retention-days: 30
 
@@ -124,10 +126,11 @@ jobs:
           $version = "${{ steps.version.outputs.version }}"
           $installer = "installer\Output\MiniURLConverterSetup-$version.exe"
           $standalone = "dist\MiniURLConverter-$version.exe"
+          $host = "dist\ChromeNativeHost-$version.exe"
 
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag $installer $standalone --clobber --repo $env:GITHUB_REPOSITORY
+            gh release upload $tag $installer $standalone $host --clobber --repo $env:GITHUB_REPOSITORY
           } else {
-            gh release create $tag $installer $standalone --title $tag --generate-notes --repo $env:GITHUB_REPOSITORY
+            gh release create $tag $installer $standalone $host --title $tag --generate-notes --repo $env:GITHUB_REPOSITORY
           }

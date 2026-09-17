@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\chrome_bridge_auth.py'],
+    ['app\\chrome_native_host.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -22,15 +22,14 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='mini_url_converter',
-    icon='img\\mini_url_converter.ico',
+    name='chrome_native_host',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
