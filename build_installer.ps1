@@ -100,13 +100,11 @@ function Ensure-InnoSetup {
 
     New-Item -ItemType Directory -Path $InnoDir -Force | Out-Null
 
-    # Use official redirect; version may change.
     $installerUrl = 'https://jrsoftware.org/download.php/is.exe'
     $installerPath = Join-Path $InnoDir 'innosetup-installer.exe'
     Write-Host "[INFO] Downloading Inno Setup installer..."
     Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
 
-    # Install into tools\inno so builds are reproducible in this workspace.
     Write-Host "[INFO] Installing Inno Setup (silent)..."
     $args = @(
         '/VERYSILENT',
@@ -132,7 +130,6 @@ function Build-Exe {
         Write-Host "[INFO] PyInstaller is missing; installing it..."
         Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','pip','install','pyinstaller'))
     }
-    # Use spec so settings like embedded icon stay consistent across builds.
     Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','PyInstaller','--noconfirm','--clean','mini_url_converter.spec'))
     if (-not (Test-Path -LiteralPath (Join-Path $DistDir 'mini_url_converter.exe') -PathType Leaf)) {
         throw "Built exe not found in dist: $DistDir"
@@ -178,7 +175,13 @@ function Smoke-Test {
         }
 
         $installedExe = Join-Path $testAppDir 'mini_url_converter.exe'
-        Invoke-WindowedSelfTest -ExePath $installedExe -DataDirectory $testAppDir
+        $smokeDataDir = [Environment]::GetEnvironmentVariable('MINI_URL_CONVERTER_DATA_DIR', 'Process')
+        if ([string]::IsNullOrWhiteSpace($smokeDataDir)) {
+            $smokeDataDir = $testAppDir
+        } else {
+            Write-Host "[INFO] Reusing pre-seeded self-test data dir: $smokeDataDir"
+        }
+        Invoke-WindowedSelfTest -ExePath $installedExe -DataDirectory $smokeDataDir
         Write-Host "[OK] Installed application smoke test passed."
     } finally {
         if (Test-Path -LiteralPath $testRoot) {
