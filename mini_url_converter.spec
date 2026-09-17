@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['app\\release_app.py'],
+    ['app\\ui_assets.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('assets\\icons', 'assets\\icons')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

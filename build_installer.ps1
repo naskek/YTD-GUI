@@ -160,13 +160,18 @@ function Resolve-InnoCompiler {
     return $IsccExe
 }
 
-function Build-Exe {
+function Ensure-PythonBuildDependencies {
     $python = Get-PythonLauncher
-    & $python.FilePath @($python.PrefixArgs + @('-c', 'import PyInstaller'))
+    & $python.FilePath @($python.PrefixArgs + @('-c', 'import PyInstaller, PIL'))
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[INFO] PyInstaller is missing; installing version $PyInstallerVersion..."
-        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','pip','install',("pyinstaller==" + $PyInstallerVersion)))
+        Write-Host "[INFO] Build dependencies are missing; installing PyInstaller $PyInstallerVersion and Pillow..."
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','pip','install',("pyinstaller==" + $PyInstallerVersion),'Pillow'))
     }
+}
+
+function Build-Exe {
+    Ensure-PythonBuildDependencies
+    $python = Get-PythonLauncher
     Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','PyInstaller','--noconfirm','--clean','mini_url_converter.spec'))
     if (-not (Test-Path -LiteralPath (Join-Path $DistDir 'mini_url_converter.exe') -PathType Leaf)) {
         throw "Built exe not found in dist: $DistDir"
@@ -237,10 +242,23 @@ try {
 
         $python = Get-PythonLauncher
         Write-Stage 'Python syntax check'
-        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('-m','py_compile','app\mini_url_converter.py','app\launcher.py','app\version.py'))
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @(
+            '-m','py_compile',
+            'app\mini_url_converter.py',
+            'app\launcher.py',
+            'app\main.py',
+            'app\runtime.py',
+            'app\auto_auth.py',
+            'app\browser_auth.py',
+            'app\auth_policy.py',
+            'app\release_app.py',
+            'app\ui_polish.py',
+            'app\ui_assets.py',
+            'app\version.py'
+        ))
 
         Write-Stage 'Source self-test'
-        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('app\launcher.py','--self-test'))
+        Invoke-ExternalCommand -FilePath $python.FilePath -Arguments ($python.PrefixArgs + @('app\ui_assets.py','--self-test'))
 
         Write-Stage 'Build PyInstaller EXE'
         Build-Exe
