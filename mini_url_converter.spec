@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\runtime.py'],
+    ['app\\auto_auth.py'],
     pathex=[],
     binaries=[],
     datas=[],
