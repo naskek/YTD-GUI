@@ -65,8 +65,8 @@ jobs:
       - name: Source syntax and release self-test
         shell: pwsh
         run: |
-          python -m py_compile app/mini_url_converter.py app/launcher.py app/main.py app/runtime.py app/auto_auth.py app/browser_auth.py app/auth_policy.py app/release_app.py app/ui_polish.py app/version.py
-          python app/ui_polish.py --self-test
+          python -m py_compile app/mini_url_converter.py app/launcher.py app/main.py app/runtime.py app/auto_auth.py app/browser_auth.py app/auth_policy.py app/release_app.py app/ui_polish.py app/ui_assets.py app/version.py
+          python app/ui_assets.py --self-test
 
       - name: Build and run smoke tests
         shell: pwsh
