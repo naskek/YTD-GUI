@@ -39,10 +39,26 @@ AUTO_TEXT = {
         "none_status": "YouTube authentication is disabled.",
         "auto_try": "YouTube authentication: checking {browser}...",
         "auto_selected": "YouTube authentication: {browser} (automatic)",
+        "auto_locked_log": "YouTube authentication: {browser} is open and is locking its cookie database.",
+        "auto_auth_missing_log": "YouTube authentication: {browser} did not provide a usable YouTube session.",
+        "auto_decrypt_log": "YouTube authentication: could not decrypt cookies from {browser}.",
         "auto_no_browser": "YouTube authentication: no working browser session was found; trying without authentication.",
         "auto_cookie_error": (
             "The app could not obtain a working YouTube session automatically.\n\n"
             "Make sure you are signed in to YouTube in a supported browser. You can also choose a browser manually or import cookies.txt in Settings."
+        ),
+        "browser_locked_title": "Browser cookies are locked",
+        "browser_locked_message": (
+            "{browser} is open and Windows will not allow yt-dlp to read its cookie database.\n\n"
+            "Close {browser} completely, then click Retry. You do not need to paste the URL again."
+        ),
+        "browser_decrypt_message": (
+            "The app found {browser}, but Windows could not decrypt its cookies.\n\n"
+            "Try another browser in Settings or use cookies.txt."
+        ),
+        "button_retry": "Retry",
+        "preflight_auth_skipped": (
+            "Media preflight could not authenticate with YouTube; the main download will try automatic browser authentication."
         ),
     },
     "ru": {
@@ -60,10 +76,26 @@ AUTO_TEXT = {
         "none_status": "Авторизация YouTube отключена.",
         "auto_try": "Авторизация YouTube: проверяю {browser}...",
         "auto_selected": "Авторизация YouTube: {browser} (автоматически)",
+        "auto_locked_log": "Авторизация YouTube: {browser} открыт и блокирует базу cookies.",
+        "auto_auth_missing_log": "Авторизация YouTube: в {browser} не найдена подходящая сессия YouTube.",
+        "auto_decrypt_log": "Авторизация YouTube: не удалось расшифровать cookies из {browser}.",
         "auto_no_browser": "Авторизация YouTube: рабочая браузерная сессия не найдена, пробую без авторизации.",
         "auto_cookie_error": (
             "Не удалось автоматически получить рабочую авторизацию YouTube.\n\n"
             "Убедитесь, что вы вошли в YouTube в поддерживаемом браузере. В настройках также можно выбрать браузер вручную или импортировать cookies.txt."
+        ),
+        "browser_locked_title": "Cookies браузера заблокированы",
+        "browser_locked_message": (
+            "{browser} открыт, и Windows не даёт yt-dlp прочитать его базу cookies.\n\n"
+            "Полностью закройте {browser}, затем нажмите «Повторить». Ссылку вставлять заново не нужно."
+        ),
+        "browser_decrypt_message": (
+            "Программа нашла {browser}, но Windows не смогла расшифровать его cookies.\n\n"
+            "Попробуйте другой браузер в настройках или используйте cookies.txt."
+        ),
+        "button_retry": "Повторить",
+        "preflight_auth_skipped": (
+            "Предварительный анализ не смог авторизоваться в YouTube; основная загрузка попробует автоматическую авторизацию через браузер."
         ),
     },
 }
@@ -131,7 +163,36 @@ def _default_windows_browser() -> str | None:
     return None
 
 
+def _classify_probe_output(output: str) -> str:
+    lower = output.lower()
+    if (
+        ("could not copy" in lower and "cookie database" in lower)
+        or ("permissionerror" in lower and "network\\cookies" in lower)
+        or ("permission denied" in lower and "cookie" in lower and "database" in lower)
+    ):
+        return "locked"
+    if "failed to decrypt" in lower or "app-bound encryption" in lower or "dpapi" in lower and "decrypt" in lower:
+        return "decrypt"
+    if any(pattern in lower for pattern in core.AUTH_REQUIRED_PATTERNS):
+        return "auth"
+    return "error"
+
+
+def _looks_like_auth_problem(text: str) -> bool:
+    lower = text.lower()
+    return any(pattern in lower for pattern in core.AUTH_REQUIRED_PATTERNS) or _classify_probe_output(text) in {
+        "locked",
+        "decrypt",
+        "auth",
+    }
+
+
 class App(previous.App):
+    def __init__(self, root: tk.Tk) -> None:
+        self._auto_cookie_problem_kind = ""
+        self._auto_cookie_problem_browser = ""
+        super().__init__(root)
+
     def auto(self, key: str, **kwargs: object) -> str:
         language = self.language if self.language in AUTO_TEXT else "en"
         template = AUTO_TEXT[language].get(key) or AUTO_TEXT["en"].get(key) or key
@@ -180,11 +241,19 @@ class App(previous.App):
         return super()._cookie_status_text(path)
 
     def rt(self, key: str, **kwargs: object) -> str:
-        if key == "cookie_compact" and str(self.ytdlp_settings.get("auth_mode", "auto")) == "auto":
-            return self.auto("auto_cookie_error")
+        if str(self.ytdlp_settings.get("auth_mode", "auto")) == "auto":
+            if key == "preflight_auth_skipped":
+                return self.auto("preflight_auth_skipped")
+            if key == "cookie_compact":
+                browser_name = self._browser_name(self._auto_cookie_problem_browser or "chrome")
+                if self._auto_cookie_problem_kind == "locked":
+                    return self.auto("browser_locked_message", browser=browser_name)
+                if self._auto_cookie_problem_kind == "decrypt":
+                    return self.auto("browser_decrypt_message", browser=browser_name)
+                return self.auto("auto_cookie_error")
         return super().rt(key, **kwargs)
 
-    def _probe_browser_for_url(self, browser: str, url: str) -> bool:
+    def _probe_browser_for_url(self, browser: str, url: str) -> tuple[str, str]:
         command = [
             str(core.YT_DLP_PATH),
             "--encoding",
@@ -210,11 +279,21 @@ class App(previous.App):
                 check=False,
                 creationflags=core.CREATE_NO_WINDOW,
             )
-        except Exception:
-            return False
-        return result.returncode == 0 and bool((result.stdout or "").strip())
+        except subprocess.TimeoutExpired as exc:
+            return "error", str(exc)
+        except Exception as exc:
+            return "error", str(exc)
+
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        combined = "\n".join(part for part in (stdout, stderr) if part).strip()
+        if result.returncode == 0 and stdout.strip():
+            return "ok", combined
+        return _classify_probe_output(combined), combined
 
     def _select_auto_browser(self, url: str) -> str | None:
+        self._auto_cookie_problem_kind = ""
+        self._auto_cookie_problem_browser = ""
         candidates = self._detected_browser_candidates()
         # If detection found nothing, try the user's saved preference once. This
         # also covers portable/custom browser installs that are outside our known paths.
@@ -223,21 +302,129 @@ class App(previous.App):
             if fallback in core.COOKIE_BROWSER_CHOICES:
                 candidates = [fallback]
 
+        first_locked = ""
+        first_decrypt = ""
         for browser in candidates:
-            self._append_log(self.auto("auto_try", browser=self._browser_name(browser)) + "\n")
-            if not self._probe_browser_for_url(browser, url):
+            browser_name = self._browser_name(browser)
+            self._append_log(self.auto("auto_try", browser=browser_name) + "\n")
+            result_kind, _detail = self._probe_browser_for_url(browser, url)
+            if result_kind == "ok":
+                self._auto_cookie_problem_kind = ""
+                self._auto_cookie_problem_browser = ""
+                self.ytdlp_settings["auto_browser"] = browser
+                self.ytdlp_settings["cookies_browser"] = browser
+                try:
+                    self.save_settings()
+                except Exception:
+                    pass
+                self._append_log(self.auto("auto_selected", browser=browser_name) + "\n")
+                return browser
+            if result_kind == "locked":
+                if not first_locked:
+                    first_locked = browser
+                self._append_log(self.auto("auto_locked_log", browser=browser_name) + "\n")
                 continue
-            self.ytdlp_settings["auto_browser"] = browser
-            self.ytdlp_settings["cookies_browser"] = browser
-            try:
-                self.save_settings()
-            except Exception:
-                pass
-            self._append_log(self.auto("auto_selected", browser=self._browser_name(browser)) + "\n")
-            return browser
+            if result_kind == "decrypt":
+                if not first_decrypt:
+                    first_decrypt = browser
+                self._append_log(self.auto("auto_decrypt_log", browser=browser_name) + "\n")
+                continue
+            if result_kind == "auth":
+                self._append_log(self.auto("auto_auth_missing_log", browser=browser_name) + "\n")
+
+        if first_locked:
+            self._auto_cookie_problem_kind = "locked"
+            self._auto_cookie_problem_browser = first_locked
+        elif first_decrypt:
+            self._auto_cookie_problem_kind = "decrypt"
+            self._auto_cookie_problem_browser = first_decrypt
 
         self._append_log(self.auto("auto_no_browser") + "\n")
         return None
+
+    def run_url_analysis_job(self, request_id: int, url: str) -> None:
+        try:
+            self.ensure_required_binary("yt-dlp.exe", core.YT_DLP_PATH)
+            info = self.fetch_url_analysis_info(url)
+            output_path = self.resolve_analysis_output_path(info)
+            if output_path is not None and output_path.exists() and output_path.is_file():
+                size_bytes = float(output_path.stat().st_size)
+                log_text = self.tr("log_actual_output_size", size_mb=self.format_size_mb(size_bytes))
+            else:
+                size_bytes = self.estimate_output_size_bytes(info)
+                if size_bytes is None:
+                    raise core.AppError("No filesize metadata returned by yt-dlp.")
+                log_text = self.tr("log_estimated_output_size", size_mb=self.format_size_mb(size_bytes))
+            if request_id != self.url_analysis_request_id or self.closing:
+                return
+            self._append_log(log_text + "\n")
+        except Exception as exc:
+            if request_id != self.url_analysis_request_id or self.closing:
+                return
+            detail = self._stringify_error(exc)
+            if str(self.ytdlp_settings.get("auth_mode", "auto")) == "auto" and _looks_like_auth_problem(detail):
+                return
+            self._append_log(self.tr("log_failed_estimate_output_size", error=detail) + "\n")
+
+    def _show_cookie_dialog(self) -> None:
+        if (
+            str(self.ytdlp_settings.get("auth_mode", "auto")) != "auto"
+            or self._auto_cookie_problem_kind != "locked"
+        ):
+            super()._show_cookie_dialog()
+            return
+
+        browser = self._auto_cookie_problem_browser or "chrome"
+        browser_name = self._browser_name(browser)
+        dialog = tk.Toplevel(self.root)
+        dialog.title(self.auto("browser_locked_title"))
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+
+        body = ttk.Frame(dialog, padding=14)
+        body.pack(fill="both", expand=True)
+        ttk.Label(
+            body,
+            text=self.auto("browser_locked_message", browser=browser_name),
+            wraplength=430,
+            justify="left",
+        ).pack(fill="x")
+
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x", pady=(14, 0))
+
+        def wait_until_idle(callback: object) -> None:
+            if self.worker_thread and self.worker_thread.is_alive():
+                self.root.after(100, lambda: wait_until_idle(callback))
+                return
+            callback()  # type: ignore[operator]
+
+        def retry_download() -> None:
+            if dialog.winfo_exists():
+                dialog.destroy()
+            self._auto_cookie_problem_kind = ""
+            self._auto_cookie_problem_browser = ""
+            self.root.after(50, lambda: wait_until_idle(self.on_start))
+
+        def open_settings_when_ready() -> None:
+            if dialog.winfo_exists():
+                dialog.destroy()
+            self.root.after(50, lambda: wait_until_idle(self.open_settings_dialog))
+
+        ttk.Button(buttons, text=self.rt("button_close"), command=dialog.destroy).pack(side="right")
+        ttk.Button(buttons, text=self.rt("button_open_settings"), command=open_settings_when_ready).pack(
+            side="right", padx=(0, 8)
+        )
+        ttk.Button(buttons, text=self.auto("button_retry"), command=retry_download).pack(
+            side="right", padx=(0, 8)
+        )
+
+        dialog.update_idletasks()
+        x = self.root.winfo_rootx() + max(0, (self.root.winfo_width() - dialog.winfo_width()) // 2)
+        y = self.root.winfo_rooty() + max(0, (self.root.winfo_height() - dialog.winfo_height()) // 2)
+        dialog.geometry(f"+{x}+{y}")
+        dialog.focus_force()
 
     def run_ytdlp_command(self, command: list[str]) -> str | None:
         if str(self.ytdlp_settings.get("auth_mode", "auto")) != "auto":
@@ -265,6 +452,15 @@ def self_test() -> int:
         errors.append("Automatic authentication is not the first auth mode.")
     if _dedupe(["chrome", "chrome", "edge", "chrome"]) != ["chrome", "edge"]:
         errors.append("Browser candidate deduplication failed.")
+    locked_sample = (
+        "ERROR: Could not copy Chrome cookie database.\n"
+        "PermissionError: [Errno 13] Permission denied: C:\\Users\\x\\Chrome\\Default\\Network\\Cookies"
+    )
+    if _classify_probe_output(locked_sample) != "locked":
+        errors.append("Locked browser cookie database was not classified correctly.")
+    auth_sample = "ERROR: Sign in to confirm your age. Use --cookies-from-browser or --cookies"
+    if _classify_probe_output(auth_sample) != "auth":
+        errors.append("YouTube authentication failure was not classified correctly.")
     if errors:
         core._write_self_test_diagnostic("\n".join(errors) + "\n", is_error=True)
         return 1
