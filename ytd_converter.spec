@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\self_update.py'],
+    ['app\\inplace_update.py'],
     pathex=[],
     binaries=[],
     datas=[('assets\\icons', 'assets\\icons')],
