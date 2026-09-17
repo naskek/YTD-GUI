@@ -14,7 +14,7 @@ function Invoke-Checked {
     Write-Host ("[RUN] " + $FilePath + ' ' + ($Arguments -join ' '))
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Command failed with exit code $LASTEXITCODE: $FilePath $($Arguments -join ' ')"
+        throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
     }
 }
 
@@ -59,6 +59,6 @@ $proc = Start-Process -FilePath $guiExe -ArgumentList @('--self-test') -WorkingD
 if ($proc.ExitCode -ne 0) { throw "GUI self-test failed with exit code $($proc.ExitCode)" }
 
 & (Join-Path $ProjectRoot 'build_installer.ps1') -SkipBuildExe
-if ($LASTEXITCODE -ne 0) { throw "Installer build failed with exit code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw "Installer build failed with exit code ${LASTEXITCODE}" }
 
 Write-Host '[OK] Chrome bridge build completed.'
