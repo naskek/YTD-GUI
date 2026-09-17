@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\chrome_bridge_auth.py'],
+    ['app\\release_app.py'],
     pathex=[],
     binaries=[],
     datas=[],
