@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\browser_auth.py'],
+    ['app\\auth_policy.py'],
     pathex=[],
     binaries=[],
     datas=[],
