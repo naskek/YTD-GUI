@@ -102,8 +102,8 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          Copy-Item "installer\Output\MiniURLConverterSetup.exe" "installer\Output\YTDConverterSetup-$version.exe"
-          Copy-Item "installer\Output\MiniURLConverterSetup.exe" "installer\Output\MiniURLConverterSetup-$version.exe"
+          Copy-Item "installer\Output\YTDConverterSetup.exe" "installer\Output\YTDConverterSetup-$version.exe"
+          Copy-Item "installer\Output\YTDConverterSetup.exe" "installer\Output\MiniURLConverterSetup-$version.exe"
           Copy-Item "dist\mini_url_converter.exe" "dist\YTDConverter-$version.exe"
 
       - name: Upload build artifact
