@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\auto_auth.py'],
+    ['app\\browser_auth.py'],
     pathex=[],
     binaries=[],
     datas=[],
