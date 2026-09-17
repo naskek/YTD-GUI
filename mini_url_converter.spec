@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['app\\mini_url_converter.py'],
+    ['app\\launcher.py'],
     pathex=[],
     binaries=[],
     datas=[],
