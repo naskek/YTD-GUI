@@ -62,6 +62,12 @@ jobs:
 
           "MINI_URL_CONVERTER_DATA_DIR=$dataDir" >> $env:GITHUB_ENV
 
+      - name: Source syntax and auth policy self-test
+        shell: pwsh
+        run: |
+          python -m py_compile app/mini_url_converter.py app/launcher.py app/main.py app/runtime.py app/auto_auth.py app/browser_auth.py app/auth_policy.py app/version.py
+          python app/auth_policy.py --self-test
+
       - name: Build and run smoke tests
         shell: pwsh
         run: .\build_installer.ps1
