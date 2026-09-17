@@ -44,9 +44,8 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 Source: "..\dist\mini_url_converter.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\chrome_native_host.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\chrome_extension\*"; DestDir: "{app}\chrome_extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Runtime tools are stored in user-writable app data and maintained by the update center.
+; The experimental Chrome bridge stays in source control but is intentionally not shipped in v1.2.0.
 
 [Icons]
 Name: "{#DesktopDir}\Mini URL Converter"; Filename: "{app}\mini_url_converter.exe"; Tasks: desktopicon
