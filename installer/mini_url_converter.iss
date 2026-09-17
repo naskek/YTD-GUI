@@ -1,7 +1,7 @@
 [Preprocessor]
 #define AppVersionEnv GetEnv("YTD_GUI_VERSION")
 #if AppVersionEnv == ""
-  #define AppVersion "1.1.0"
+  #define AppVersion "1.2.0"
 #else
   #define AppVersion AppVersionEnv
 #endif
@@ -44,8 +44,7 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 Source: "..\dist\mini_url_converter.exe"; DestDir: "{app}"; Flags: ignoreversion
-; Tools are fetched on demand into user-writable app data (see ensure_tools_present/self_test),
-; so the installer does not bundle yt-dlp/ffmpeg binaries.
+; Runtime tools are stored in user-writable app data and maintained by the update center.
 
 [Icons]
 Name: "{#DesktopDir}\Mini URL Converter"; Filename: "{app}\mini_url_converter.exe"; Tasks: desktopicon
