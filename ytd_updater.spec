@@ -23,7 +23,7 @@ exe = EXE(
     a.datas,
     [],
     name='YTDUpdater',
-    icon='img\\ytd_converter.ico',
+    icon='assets\\branding\\ytd_converter.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
