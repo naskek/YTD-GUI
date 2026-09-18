@@ -28,3 +28,9 @@
 Для обычных публичных видео cookies не нужны. Если YouTube требует вход, приложение предложит выбрать свежий `cookies.txt`.
 
 Файл можно экспортировать из Chrome расширением **Get cookies.txt LOCALLY** в формате Netscape. Не передавайте `cookies.txt` другим людям — он содержит данные вашей сессии.
+
+## Скриншот
+
+<p align="center">
+  <img src="docs/images/main-window.png" alt="YTD Converter — главное окно" width="900">
+</p>
